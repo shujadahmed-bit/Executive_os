@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Executive OS</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        surface: { base: '#08090a', panel: '#0f1011', elevated: '#151618', hover: '#1a1b1e', active: '#1e1f23' },
+        accent: { DEFAULT: '#5e6ad2', hover: '#7170ff', light: '#828fff', muted: 'rgba(94,106,210,0.15)' },
+        border: { DEFAULT: 'rgba(255,255,255,0.06)', hover: 'rgba(255,255,255,0.1)' },
+        text: { primary: '#f7f8f8', secondary: '#8a8f98', tertiary: '#5c6068', muted: '#3a3d42' }
+      },
+      fontFamily: {
+        sans: ['Inter','SF Pro Display','-apple-system','system-ui','Segoe UI','Roboto','sans-serif'],
+        mono: ['ui-monospace','SF Mono','Menlo','Monaco','Consolas','monospace'],
+      },
+    }
+  }
+}
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(2); opacity: 0; } }
+.animate-fadeIn { animation: fadeIn 0.2s ease-out forwards; }
+.animate-slideIn { animation: slideIn 0.2s ease-out forwards; }
+.task-card { transition: all 0.15s ease; }
+.task-card:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.status-dot { position: relative; }
+.status-dot::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+</style>
+</head>
+<body class="bg-surface-base text-text-primary font-sans antialiased overflow-hidden">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── Icons ───
+const I = {
+  LayoutDashboard: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  FolderKanban: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M8 10v4"/><path d="M12 10v2"/><path d="M16 10v6"/></svg>,
+  CheckSquare: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+  Sparkles: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>,
+  Target: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+  FileText: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>,
+  StickyNote: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/></svg>,
+  Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>,
+  Search: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+  Bell: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
+  Settings: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+  Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+  MoreHorizontal: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>,
+  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+  MessageSquare: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  Paperclip: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>,
+  ChevronDown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>,
+  X: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+  Send: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>,
+  List: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>,
+  Columns: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>,
+  BarChart3: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>,
+  Flame: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+  TrendingUp: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>,
+  Users: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  Command: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>,
+  Hash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></svg>,
+  ArrowRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
+  Filter: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>,
+  Star: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+  Lightbulb: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>,
+  Brain: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>,
+  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6 9 17l-5-5"/></svg>,
+  Circle: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>,
+  Trash2: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+  Edit3: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>,
+  Pin: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>,
+  Inbox: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>,
+};
+
+// ─── Data ───
+const USERS = [
+  { id: 'u1', name: 'Alex Chen', avatar: 'AC', color: '#5e6ad2' },
+  { id: 'u2', name: 'Sarah Miller', avatar: 'SM', color: '#e06c75' },
+  { id: 'u3', name: 'James Wilson', avatar: 'JW', color: '#98c379' },
+  { id: 'u4', name: 'Emily Park', avatar: 'EP', color: '#e5c07b' },
+];
+
+const PROJECTS = [
+  { id: 'p1', name: 'Q3 Product Launch', color: '#5e6ad2', progress: 72 },
+  { id: 'p2', name: 'Design System v2', color: '#e06c75', progress: 45 },
+  { id: 'p3', name: 'Mobile App Redesign', color: '#98c379', progress: 88 },
+  { id: 'p4', name: 'AI Integration', color: '#e5c07b', progress: 30 },
+];
+
+const INITIAL_TASKS = [
+  { id: 't1', title: 'Finalize homepage hero section', status: 'todo', priority: 'high', assignee: 'u1', project: 'p1', dueDate: '2026-07-16', comments: 3, attachments: 1, subtasks: [{done: true}, {done: false}] },
+  { id: 't2', title: 'Review API documentation', status: 'in-progress', priority: 'medium', assignee: 'u2', project: 'p1', dueDate: '2026-07-18', comments: 1, attachments: 0, subtasks: [{done: false}] },
+  { id: 't3', title: 'Set up analytics dashboard', status: 'done', priority: 'low', assignee: 'u3', project: 'p2', dueDate: '2026-07-14', comments: 5, attachments: 2, subtasks: [{done: true}, {done: true}] },
+  { id: 't4', title: 'User interview synthesis', status: 'in-progress', priority: 'high', assignee: 'u1', project: 'p3', dueDate: '2026-07-17', comments: 2, attachments: 3, subtasks: [{done: true}, {done: false}, {done: false}] },
+  { id: 't5', title: 'Competitive analysis report', status: 'todo', priority: 'medium', assignee: 'u4', project: 'p2', dueDate: '2026-07-20', comments: 0, attachments: 1, subtasks: [] },
+  { id: 't6', title: 'Fix navigation bug on mobile', status: 'done', priority: 'urgent', assignee: 'u2', project: 'p3', dueDate: '2026-07-15', comments: 8, attachments: 0, subtasks: [{done: true}] },
+  { id: 't7', title: 'Draft AI assistant prompts', status: 'todo', priority: 'high', assignee: 'u1', project: 'p4', dueDate: '2026-07-19', comments: 1, attachments: 0, subtasks: [{done: false}, {done: false}] },
+  { id: 't8', title: 'Update component library', status: 'in-progress', priority: 'low', assignee: 'u3', project: 'p2', dueDate: '2026-07-21', comments: 0, attachments: 1, subtasks: [] },
+];
+
+const MEETING_NOTES = [
+  { id: 'm1', title: 'Weekly Standup — July 14', date: '2026-07-14', project: 'p1', content: 'Discussed Q3 launch timeline. Marketing team needs assets by Friday. Engineering blocked on auth service migration.' },
+  { id: 'm2', title: 'Design Review: Mobile App', date: '2026-07-13', project: 'p3', content: 'Approved new navigation pattern. Action items: Update Figma components, schedule user testing for next week.' },
+  { id: 'm3', title: 'AI Strategy Session', date: '2026-07-12', project: 'p4', content: 'Defined MVP scope for AI assistant. Focus on task creation and summarization first. Integrate with OpenAI API.' },
+];
+
+const PERSONAL_NOTES = [
+  { id: 'n1', title: 'Product Strategy Ideas', content: "Key insights from user research:\n\n1. Users want faster task creation\n2. Mobile experience is critical\n3. AI should feel invisible, not intrusive\n\nNext steps: Validate with 5 more interviews.", updated: '2h ago' },
+  { id: 'n2', title: 'Reading List', content: "Shape Up by Basecamp\nThe Making of a Manager\nContinuous Discovery Habits\n\nPriority: Shape Up for sprint planning ideas.", updated: '1d ago' },
+];
+
+const VISION_ITEMS = [
+  { id: 'v1', title: 'Become the #1 AI-powered workspace', category: 'goal', color: '#5e6ad2' },
+  { id: 'v2', title: 'Launch in 3 new markets', category: 'goal', color: '#98c379' },
+  { id: 'v3', title: 'Inspiration: Linear motion design', category: 'inspiration', color: '#e5c07b' },
+  { id: 'v4', title: 'Team offsite in Tokyo', category: 'idea', color: '#e06c75' },
+  { id: 'v5', title: 'Zero-to-one playbook', category: 'idea', color: '#5e6ad2' },
+  { id: 'v6', title: 'Quote: Simplicity is the ultimate sophistication', category: 'inspiration', color: '#98c379' },
+];
+
+const AI_MESSAGES = [
+  { id: 'a1', role: 'assistant', content: "Hello! I'm your Executive Assistant. I can help you create tasks, break down projects, summarize meetings, and prioritize your work. What would you like to do today?" },
+];
+
+const ACTIVITY_FEED = [
+  { id: 'act1', user: 'Alex Chen', action: 'completed', target: 'Fix navigation bug on mobile', time: '15 min ago', project: 'p3' },
+  { id: 'act2', user: 'Sarah Miller', action: 'commented on', target: 'Review API documentation', time: '1h ago', project: 'p1' },
+  { id: 'act3', user: 'James Wilson', action: 'created', target: 'Set up analytics dashboard', time: '3h ago', project: 'p2' },
+  { id: 'act4', user: 'Emily Park', action: 'moved to done', target: 'User interview synthesis', time: '5h ago', project: 'p3' },
+];
+
+const NOTIFICATIONS = [
+  { id: 'not1', title: 'Task assigned to you', desc: 'Review API documentation', time: '5 min ago', read: false },
+  { id: 'not2', title: 'Comment on your task', desc: 'James commented on "Set up analytics dashboard"', time: '1h ago', read: false },
+  { id: 'not3', title: 'Deadline approaching', desc: 'Finalize homepage hero section due tomorrow', time: '2h ago', read: true },
+  { id: 'not4', title: 'Meeting reminder', desc: 'Design Review in 30 minutes', time: '3h ago', read: true },
+];
+
+const CALENDAR_EVENTS = [
+  { id: 'e1', title: 'Daily Standup', time: '09:00', duration: 30, color: '#5e6ad2', day: 2 },
+  { id: 'e2', title: 'Design Review', time: '11:00', duration: 60, color: '#e06c75', day: 2 },
+  { id: 'e3', title: 'Lunch with Team', time: '12:30', duration: 60, color: '#98c379', day: 2 },
+  { id: 'e4', title: 'Sprint Planning', time: '14:00', duration: 90, color: '#e5c07b', day: 2 },
+  { id: 'e5', title: '1:1 with Sarah', time: '10:00', duration: 30, color: '#5e6ad2', day: 3 },
+  { id: 'e6', title: 'Code Review', time: '15:00', duration: 45, color: '#e06c75', day: 4 },
+];
+
+// ─── Helpers ───
+const Avatar = ({ user, size = 'sm' }) => {
+  const u = USERS.find(x => x.id === user) || USERS[0];
+  const sizeClass = size === 'sm' ? 'w-6 h-6 text-[10px]' : size === 'md' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
+  return (
+    <div className={`${sizeClass} rounded-full flex items-center justify-center font-semibold text-white shrink-0`} style={{ backgroundColor: u.color }}>
+      {u.avatar}
+    </div>
+  );
+};
+
+const PriorityBadge = ({ priority }) => {
+  const colors = {
+    urgent: 'text-red-400 bg-red-400/10 border-red-400/20',
+    high: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+    medium: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+    low: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${colors[priority] || colors.medium}`}>
+      {priority}
+    </span>
+  );
+};
+
+const ProgressBar = ({ progress, color }) => (
+  <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: color || '#5e6ad2' }} />
+  </div>
+);
+
+// ─── Sidebar ───
+const Sidebar = ({ activeView, setActiveView, collapsed, setCollapsed }) => {
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: I.LayoutDashboard },
+    { id: 'projects', label: 'Projects', icon: I.FolderKanban },
+    { id: 'tasks', label: 'My Tasks', icon: I.CheckSquare },
+    { id: 'ai', label: 'AI Assistant', icon: I.Sparkles },
+    { id: 'vision', label: 'Vision Board', icon: I.Target },
+    { id: 'meetings', label: 'Meetings', icon: I.FileText },
+    { id: 'notes', label: 'Notes', icon: I.StickyNote },
+    { id: 'calendar', label: 'Calendar', icon: I.Calendar },
+  ];
+
+  return (
+    <aside className={`${collapsed ? 'w-16' : 'w-60'} bg-surface-panel border-r border-border flex flex-col transition-all duration-200 shrink-0`}>
+      <div className="h-14 flex items-center px-4 border-b border-border">
+        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center mr-3">
+          <I.Command />
+        </div>
+        {!collapsed && <span className="font-semibold text-sm tracking-tight">Executive OS</span>}
+      </div>
+
+      <nav className="flex-1 py-3 px-2 space-y-0.5">
+        {navItems.map(item => {
+          const Icon = item.icon;
+          const isActive = activeView === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveView(item.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 group
+                ${isActive ? 'bg-accent/10 text-accent-hover' : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.03]'}`}
+            >
+              <Icon />
+              {!collapsed && <span>{item.label}</span>}
+              {item.id === 'ai' && !collapsed && (
+                <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] bg-accent/20 text-accent-hover font-semibold">NEW</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="p-3 border-t border-border">
+        <button onClick={() => setCollapsed(!collapsed)} className="w-full flex items-center justify-center p-2 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-white/[0.03] transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: collapsed ? 'rotate(180deg)' : 'none' }}>
+            <path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>
+          </svg>
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+// ─── Search Overlay ───
+const SearchOverlay = ({ isOpen, onClose }) => {
+  const [query, setQuery] = useState('');
+  if (!isOpen) return null;
+
+  const results = query.length > 0 ? [
+    { type: 'task', title: 'Finalize homepage hero section', project: 'Q3 Product Launch' },
+    { type: 'project', title: 'Q3 Product Launch', items: '12 tasks' },
+    { type: 'note', title: 'Product Strategy Ideas', updated: '2h ago' },
+  ] : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-xl bg-surface-elevated rounded-xl border border-border shadow-2xl overflow-hidden animate-fadeIn" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <I.Search />
+          <input autoFocus type="text" placeholder="Search tasks, projects, notes..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-tertiary" value={query} onChange={e => setQuery(e.target.value)} />
+          <kbd className="px-2 py-1 rounded text-[10px] bg-white/5 text-text-tertiary border border-white/5">ESC</kbd>
+        </div>
+        {results.length > 0 && (
+          <div className="p-2">
+            {results.map((r, i) => (
+              <button key={i} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.03] text-left transition-colors">
+                <span className="text-text-tertiary">{r.type === 'task' ? <I.CheckSquare /> : r.type === 'project' ? <I.FolderKanban /> : <I.StickyNote />}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{r.title}</div>
+                  <div className="text-xs text-text-tertiary">{r.project || r.items || r.updated}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {query.length === 0 && <div className="p-4 text-center text-sm text-text-tertiary">Type to search across all your work</div>}
+      </div>
+    </div>
+  );
+};
+
+// ─── Notifications Panel ───
+const NotificationsPanel = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute right-4 top-14 w-80 bg-surface-elevated rounded-xl border border-border shadow-2xl overflow-hidden animate-fadeIn" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold">Notifications</h3>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-secondary"><I.X /></button>
+        </div>
+        <div className="max-h-96 overflow-auto">
+          {NOTIFICATIONS.map(notif => (
+            <div key={notif.id} className={`px-4 py-3 border-b border-border/50 hover:bg-white/[0.02] transition-colors ${!notif.read ? 'bg-accent/5' : ''}`}>
+              <div className="flex items-start gap-3">
+                {!notif.read && <div className="w-2 h-2 rounded-full bg-accent mt-1.5 shrink-0" />}
+                {notif.read && <div className="w-2 h-2 shrink-0" />}
+                <div className="flex-1">
+                  <div className="text-xs font-medium">{notif.title}</div>
+                  <div className="text-[11px] text-text-secondary mt-0.5">{notif.desc}</div>
+                  <div className="text-[10px] text-text-tertiary mt-1">{notif.time}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Dashboard ───
+const DashboardView = ({ setActiveView }) => {
+  const todayTasks = INITIAL_TASKS.filter(t => t.dueDate === '2026-07-15' && t.status !== 'done');
+  const overdueTasks = INITIAL_TASKS.filter(t => new Date(t.dueDate) < new Date('2026-07-15') && t.status !== 'done');
+
+  return (
+    <div className="p-8 max-w-7xl mx-auto animate-fadeIn">
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight mb-1">Good evening, Alex</h1>
+        <p className="text-text-secondary text-sm">You have {todayTasks.length} tasks due today and {overdueTasks.length} overdue.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {[
+          { icon: <I.CheckSquare />, label: 'Today', value: todayTasks.length, sub: 'Tasks due today' },
+          { icon: <I.Flame />, label: 'Priority', value: INITIAL_TASKS.filter(t => t.priority === 'high' || t.priority === 'urgent').length, sub: 'High priority tasks' },
+          { icon: <I.TrendingUp />, label: 'Progress', value: Math.round(INITIAL_TASKS.filter(t => t.status === 'done').length / INITIAL_TASKS.length * 100) + '%', sub: 'Tasks completed' },
+          { icon: <I.Users />, label: 'Team', value: USERS.length, sub: 'Active members' },
+        ].map((stat, i) => (
+          <div key={i} className="bg-surface-elevated rounded-xl p-5 border border-border hover:border-border-hover transition-colors">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-text-tertiary">{stat.icon}</span>
+              <span className="text-xs text-text-tertiary">{stat.label}</span>
+            </div>
+            <div className="text-2xl font-semibold mb-1">{stat.value}</div>
+            <div className="text-xs text-text-secondary">{stat.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-surface-elevated rounded-xl border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-semibold text-sm">Today's Focus</h2>
+              <button onClick={() => setActiveView('tasks')} className="text-xs text-accent hover:text-accent-hover transition-colors">View all</button>
+            </div>
+            <div className="p-2">
+              {todayTasks.length === 0 ? (
+                <div className="p-8 text-center text-text-tertiary text-sm">No tasks due today. You are all caught up!</div>
+              ) : (
+                todayTasks.map(task => (
+                  <div key={task.id} className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/[0.02] group transition-colors">
+                    <button className="w-5 h-5 rounded border border-text-muted flex items-center justify-center hover:border-accent transition-colors">
+                      <div className="w-2.5 h-2.5 rounded-sm bg-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{task.title}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-text-tertiary">{PROJECTS.find(p => p.id === task.project)?.name}</span>
+                      </div>
+                    </div>
+                    <PriorityBadge priority={task.priority} />
+                    <Avatar user={task.assignee} />
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="bg-surface-elevated rounded-xl border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-semibold text-sm">Project Progress</h2>
+              <button onClick={() => setActiveView('projects')} className="text-xs text-accent hover:text-accent-hover transition-colors">View all</button>
+            </div>
+            <div className="p-4 space-y-4">
+              {PROJECTS.map(project => (
+                <div key={project.id} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
+                      <span className="text-sm font-medium">{project.name}</span>
+                    </div>
+                    <span className="text-xs text-text-secondary">{project.progress}%</span>
+                  </div>
+                  <ProgressBar progress={project.progress} color={project.color} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-surface-elevated rounded-xl border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-semibold text-sm">Recent Activity</h2>
+            </div>
+            <div className="p-3 space-y-1">
+              {ACTIVITY_FEED.map(activity => (
+                <div key={activity.id} className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.02] transition-colors">
+                  <Avatar user={USERS.find(u => u.name === activity.user)?.id} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs">
+                      <span className="font-medium text-text-primary">{activity.user}</span>
+                      <span className="text-text-secondary"> {activity.action} </span>
+                      <span className="text-text-primary">{activity.target}</span>
+                    </div>
+                    <div className="text-[11px] text-text-tertiary mt-0.5">{activity.time}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-surface-elevated rounded-xl border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-semibold text-sm">Upcoming Deadlines</h2>
+            </div>
+            <div className="p-3 space-y-1">
+              {INITIAL_TASKS.filter(t => t.status !== 'done').sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).slice(0, 4).map(task => (
+                <div key={task.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.02] transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex flex-col items-center justify-center shrink-0">
+                    <span className="text-[10px] font-bold text-text-secondary">{new Date(task.dueDate).getDate()}</span>
+                    <span className="text-[8px] text-text-tertiary uppercase">{new Date(task.dueDate).toLocaleString('default', { month: 'short' })}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{task.title}</div>
+                    <div className="text-[11px] text-text-tertiary">{PROJECTS.find(p => p.id === task.project)?.name}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Projects / Kanban ───
+const ProjectsView = () => {
+  const [viewMode, setViewMode] = useState('kanban');
+  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [draggedTask, setDraggedTask] = useState(null);
+  const [selectedProject, setSelectedProject] = useState('all');
+
+  const columns = [
+    { id: 'todo', label: 'To Do', color: '#8a8f98' },
+    { id: 'in-progress', label: 'In Progress', color: '#5e6ad2' },
+    { id: 'done', label: 'Done', color: '#98c379' },
+  ];
+
+  const handleDragStart = (task) => setDraggedTask(task);
+  const handleDragOver = (e) => e.preventDefault();
+  const handleDrop = (e, status) => {
+    e.preventDefault();
+    if (draggedTask) {
+      setTasks(prev => prev.map(t => t.id === draggedTask.id ? { ...t, status } : t));
+      setDraggedTask(null);
+    }
+  };
+
+  const filteredTasks = selectedProject === 'all' ? tasks : tasks.filter(t => t.project === selectedProject);
+
+  const TaskCard = ({ task }) => (
+    <div draggable onDragStart={() => handleDragStart(task)} className="task-card bg-surface-panel rounded-lg p-3 border border-border cursor-grab active:cursor-grabbing group">
+      <div className="flex items-start justify-between mb-2">
+        <PriorityBadge priority={task.priority} />
+        <button className="opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text-secondary transition-opacity"><I.MoreHorizontal /></button>
+      </div>
+      <h3 className="text-sm font-medium mb-3 leading-snug">{task.title}</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Avatar user={task.assignee} />
+          {task.subtasks.length > 0 && (
+            <span className="text-[11px] text-text-tertiary flex items-center gap-1"><I.CheckSquare /> {task.subtasks.filter(s => s.done).length}/{task.subtasks.length}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-text-tertiary">
+          {task.comments > 0 && <span className="text-[11px] flex items-center gap-1"><I.MessageSquare /> {task.comments}</span>}
+          {task.attachments > 0 && <span className="text-[11px] flex items-center gap-1"><I.Paperclip /> {task.attachments}</span>}
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <I.Clock />
+        <span className="text-[11px] text-text-tertiary">{task.dueDate}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full animate-fadeIn">
+      <div className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold">Projects</h1>
+          <div className="flex items-center gap-1 bg-surface-elevated rounded-lg p-0.5 border border-border">
+            {[
+              { id: 'kanban', icon: <I.Columns />, label: 'Board' },
+              { id: 'list', icon: <I.List />, label: 'List' },
+              { id: 'timeline', icon: <I.BarChart3 />, label: 'Timeline' },
+            ].map(v => (
+              <button key={v.id} onClick={() => setViewMode(v.id)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === v.id ? 'bg-white/5 text-text-primary' : 'text-text-tertiary hover:text-text-secondary'}`}>
+                <span className="flex items-center gap-1.5">{v.icon} {v.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} className="bg-surface-elevated border border-border rounded-lg px-3 py-1.5 text-xs text-text-secondary outline-none focus:border-accent">
+            <option value="all">All Projects</option>
+            {PROJECTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <button className="flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-xs font-medium transition-colors">
+            <I.Plus /> New Task
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6">
+        {viewMode === 'kanban' && (
+          <div className="flex gap-4 h-full min-w-max">
+            {columns.map(col => (
+              <div key={col.id} className="w-80 flex flex-col" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, col.id)}>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color }} />
+                    <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">{col.label}</span>
+                    <span className="text-xs text-text-tertiary bg-white/5 px-1.5 py-0.5 rounded-full">{filteredTasks.filter(t => t.status === col.id).length}</span>
+                  </div>
+                  <button className="text-text-tertiary hover:text-text-secondary"><I.Plus /></button>
+                </div>
+                <div className="flex-1 space-y-2">
+                  {filteredTasks.filter(t => t.status === col.id).map(task => <TaskCard key={task.id} task={task} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {viewMode === 'list' && (
+          <div className="bg-surface-elevated rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-text-tertiary uppercase tracking-wider">
+                  {['Task','Project','Priority','Assignee','Due Date','Status'].map(h => <th key={h} className="text-left px-4 py-3 font-medium">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTasks.map(task => (
+                  <tr key={task.id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <button className="w-4 h-4 rounded border border-text-muted flex items-center justify-center hover:border-accent transition-colors">
+                          {task.status === 'done' && <div className="w-2.5 h-2.5 rounded-sm bg-accent" />}
+                        </button>
+                        <span className={task.status === 'done' ? 'line-through text-text-tertiary' : ''}>{task.title}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary">{PROJECTS.find(p => p.id === task.project)?.name}</td>
+                    <td className="px-4 py-3"><PriorityBadge priority={task.priority} /></td>
+                    <td className="px-4 py-3"><Avatar user={task.assignee} /></td>
+                    <td className="px-4 py-3 text-text-secondary">{task.dueDate}</td>
+                    <td className="px-4 py-3"><span className="text-xs px-2 py-1 rounded-full bg-white/5 text-text-secondary capitalize">{task.status.replace('-', ' ')}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {viewMode === 'timeline' && (
+          <div className="bg-surface-elevated rounded-xl border border-border p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <button className="p-1.5 rounded-lg hover:bg-white/5 text-text-tertiary"><I.ChevronDown /></button>
+                <span className="text-sm font-medium">July 2026</span>
+                <button className="p-1.5 rounded-lg hover:bg-white/5 text-text-tertiary rotate-180"><I.ChevronDown /></button>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-text-tertiary">
+                {PROJECTS.map(p => <div key={p.id} className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} /><span>{p.name}</span></div>)}
+              </div>
+            </div>
+            <div className="space-y-6">
+              {PROJECTS.map(project => (
+                <div key={project.id} className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />{project.name}</div>
+                  <div className="relative h-8 bg-white/5 rounded-lg overflow-hidden">
+                    <div className="absolute h-full rounded-lg transition-all duration-700" style={{ left: `${(PROJECTS.indexOf(project) * 15) + 5}%`, width: `${project.progress * 0.6}%`, backgroundColor: project.color + '40', borderLeft: `3px solid ${project.color}` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── My Tasks ───
+const TasksView = () => {
+  const [filter, setFilter] = useState('all');
+  const filtered = INITIAL_TASKS.filter(t => {
+    if (filter === 'all') return true;
+    if (filter === 'today') return t.dueDate === '2026-07-15';
+    if (filter === 'high') return t.priority === 'high' || t.priority === 'urgent';
+    if (filter === 'done') return t.status === 'done';
+    return true;
+  });
+
+  return (
+    <div className="p-8 max-w-5xl mx-auto animate-fadeIn">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">My Tasks</h1>
+        <div className="flex items-center gap-2 bg-surface-elevated rounded-lg p-0.5 border border-border">
+          {['all', 'today', 'high', 'done'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${filter === f ? 'bg-white/5 text-text-primary' : 'text-text-tertiary hover:text-text-secondary'}`}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {filtered.map(task => (
+          <div key={task.id} className="flex items-center gap-4 bg-surface-elevated rounded-xl border border-border px-5 py-4 hover:border-border-hover transition-colors group">
+            <button className="w-5 h-5 rounded border border-text-muted flex items-center justify-center hover:border-accent transition-colors shrink-0">
+              {task.status === 'done' && <div className="w-3 h-3 rounded-sm bg-accent" />}
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-text-tertiary' : ''}`}>{task.title}</div>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[11px] text-text-tertiary">{PROJECTS.find(p => p.id === task.project)?.name}</span>
+                <span className="text-[11px] text-text-tertiary flex items-center gap-1"><I.Clock /> {task.dueDate}</span>
+              </div>
+            </div>
+            <PriorityBadge priority={task.priority} />
+            <Avatar user={task.assignee} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── AI Assistant ───
+const AIAssistantView = () => {
+  const [messages, setMessages] = useState(AI_MESSAGES);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(scrollToBottom, [messages]);
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    const userMsg = { id: Date.now(), role: 'user', content: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsTyping(true);
+
+    setTimeout(() => {
+      const responses = [
+        "I have analyzed your tasks and created a prioritized plan for today. Your high-priority items are the API documentation review and the homepage hero section.",
+        "Based on your project timeline, I suggest breaking down the Q3 launch into 3 sprints. Would you like me to create those tasks?",
+        "I have summarized your last 3 meeting notes. Key takeaway: The team is aligned on the mobile-first approach for the redesign.",
+        "I can see you have 2 overdue tasks. Would you like me to reschedule them or delegate to team members?",
+      ];
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: responses[Math.floor(Math.random() * responses.length)] }]);
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  const suggestions = ["Summarize my week", "Create tasks from meeting notes", "Prioritize my backlog", "Draft project plan for Q3"];
+
+  return (
+    <div className="flex flex-col h-full animate-fadeIn">
+      <div className="h-14 flex items-center px-6 border-b border-border shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center"><I.Sparkles /></div>
+          <div>
+            <h1 className="text-sm font-semibold">AI Assistant</h1>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 status-dot" />
+              <span className="text-[11px] text-text-tertiary">Online</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {messages.map(msg => (
+            <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${msg.role === 'assistant' ? 'bg-accent/20' : 'bg-white/10'}`}>
+                {msg.role === 'assistant' ? <I.Sparkles /> : <Avatar user="u1" size="sm" />}
+              </div>
+              <div className={`max-w-[80%] rounded-2xl px-5 py-3 text-sm leading-relaxed ${msg.role === 'assistant' ? 'bg-surface-elevated border border-border' : 'bg-accent text-white'}`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {isTyping && (
+            <div className="flex gap-4">
+              <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center shrink-0"><I.Sparkles /></div>
+              <div className="bg-surface-elevated border border-border rounded-2xl px-5 py-3">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 rounded-full bg-text-tertiary animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full bg-text-tertiary animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full bg-text-tertiary animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      <div className="border-t border-border p-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+            {suggestions.map((s, i) => (
+              <button key={i} onClick={() => { setInput(s); }} className="px-3 py-1.5 rounded-full bg-surface-elevated border border-border text-xs text-text-secondary hover:text-text-primary hover:border-border-hover transition-all whitespace-nowrap">
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 bg-surface-elevated border border-border rounded-xl px-4 py-3 focus-within:border-accent transition-colors">
+            <input type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Ask me anything about your work..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-tertiary" />
+            <button onClick={handleSend} className="w-8 h-8 rounded-lg bg-accent hover:bg-accent-hover flex items-center justify-center text-white transition-colors"><I.Send /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Vision Board ───
+const VisionBoardView = () => {
+  const [items, setItems] = useState(VISION_ITEMS);
+  const [newItem, setNewItem] = useState('');
+  const [category, setCategory] = useState('goal');
+
+  const addItem = () => {
+    if (!newItem.trim()) return;
+    const colors = ['#5e6ad2', '#98c379', '#e5c07b', '#e06c75'];
+    setItems(prev => [...prev, { id: Date.now(), title: newItem, category, color: colors[Math.floor(Math.random() * colors.length)] }]);
+    setNewItem('');
+  };
+
+  const removeItem = (id) => setItems(prev => prev.filter(i => i.id !== id));
+
+  const categories = {
+    goal: { label: 'Goals', icon: <I.Target /> },
+    idea: { label: 'Ideas', icon: <I.Lightbulb /> },
+    inspiration: { label: 'Inspiration', icon: <I.Star /> },
+  };
+
+  return (
+    <div className="p-8 max-w-6xl mx-auto animate-fadeIn">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight mb-1">Vision Board</h1>
+          <p className="text-text-secondary text-sm">Capture your goals, ideas, and inspiration in one place.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-3 mb-8">
+        <input type="text" value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Add a new goal, idea, or inspiration..." className="flex-1 bg-surface-elevated border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent placeholder:text-text-tertiary" />
+        <select value={category} onChange={e => setCategory(e.target.value)} className="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent text-text-secondary">
+          <option value="goal">Goal</option>
+          <option value="idea">Idea</option>
+          <option value="inspiration">Inspiration</option>
+        </select>
+        <button onClick={addItem} className="px-5 py-3 bg-accent hover:bg-accent-hover text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+          <I.Plus /> Add
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {Object.entries(categories).map(([cat, info]) => (
+          <div key={cat}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-text-secondary">{info.icon}</span>
+              <h2 className="text-sm font-semibold uppercase tracking-wider">{info.label}</h2>
+              <span className="text-xs text-text-tertiary bg-white/5 px-2 py-0.5 rounded-full">{items.filter(i => i.category === cat).length}</span>
+            </div>
+            <div className="space-y-3">
+              {items.filter(i => i.category === cat).map(item => (
+                <div key={item.id} className="bg-surface-elevated rounded-xl border border-border p-4 hover:border-border-hover transition-colors group relative">
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => removeItem(item.id)} className="text-text-tertiary hover:text-red-400"><I.X /></button>
+                  </div>
+                  <div className="w-1 h-full absolute left-0 top-0 rounded-l-xl" style={{ backgroundColor: item.color }} />
+                  <p className="text-sm font-medium pl-2">{item.title}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Meetings ───
+const MeetingsView = () => {
+  const [selectedNote, setSelectedNote] = useState(null);
+
+  return (
+    <div className="flex flex-col h-full animate-fadeIn">
+      <div className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0">
+        <h1 className="text-lg font-semibold">Meeting Notes</h1>
+        <button className="flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-xs font-medium transition-colors">
+          <I.Plus /> New Note
+        </button>
+      </div>
+      <div className="flex-1 flex overflow-hidden">
+        <div className="w-80 border-r border-border overflow-auto">
+          {MEETING_NOTES.map(note => (
+            <button key={note.id} onClick={() => setSelectedNote(note)} className={`w-full text-left px-5 py-4 border-b border-border/50 hover:bg-white/[0.02] transition-colors ${selectedNote?.id === note.id ? 'bg-accent/5 border-l-2 border-l-accent' : ''}`}>
+              <div className="text-sm font-medium mb-1">{note.title}</div>
+              <div className="flex items-center gap-2 text-[11px] text-text-tertiary">
+                <span>{note.date}</span>
+                <span>·</span>
+                <span>{PROJECTS.find(p => p.id === note.project)?.name}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-auto p-8">
+          {selectedNote ? (
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PROJECTS.find(p => p.id === selectedNote.project)?.color }} />
+                <span className="text-sm text-text-secondary">{PROJECTS.find(p => p.id === selectedNote.project)?.name}</span>
+                <span className="text-sm text-text-tertiary">·</span>
+                <span className="text-sm text-text-tertiary">{selectedNote.date}</span>
+              </div>
+              <h2 className="text-xl font-semibold mb-4">{selectedNote.title}</h2>
+              <div className="text-sm text-text-secondary leading-relaxed whitespace-pre-line">{selectedNote.content}</div>
+              <div className="mt-8 pt-6 border-t border-border">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary mb-3">Linked Tasks</h3>
+                <div className="space-y-2">
+                  {INITIAL_TASKS.filter(t => t.project === selectedNote.project).slice(0, 3).map(task => (
+                    <div key={task.id} className="flex items-center gap-3 px-4 py-3 bg-surface-elevated rounded-lg border border-border">
+                      <I.CheckSquare />
+                      <span className="text-sm">{task.title}</span>
+                      <PriorityBadge priority={task.priority} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-text-tertiary">
+              <div className="text-center">
+                <I.FileText />
+                <p className="mt-2 text-sm">Select a meeting note to view details</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Notes ───
+const NotesView = () => {
+  const [notes, setNotes] = useState(PERSONAL_NOTES);
+  const [selectedNote, setSelectedNote] = useState(PERSONAL_NOTES[0]);
+  const [editContent, setEditContent] = useState(PERSONAL_NOTES[0]?.content || '');
+
+  useEffect(() => {
+    if (selectedNote) setEditContent(selectedNote.content);
+  }, [selectedNote]);
+
+  const saveNote = () => {
+    setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, content: editContent, updated: 'Just now' } : n));
+  };
+
+  return (
+    <div className="flex flex-col h-full animate-fadeIn">
+      <div className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0">
+        <h1 className="text-lg font-semibold">Personal Notes</h1>
+        <button className="flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-xs font-medium transition-colors">
+          <I.Plus /> New Note
+        </button>
+      </div>
+      <div className="flex-1 flex overflow-hidden">
+        <div className="w-72 border-r border-border overflow-auto">
+          {notes.map(note => (
+            <button key={note.id} onClick={() => setSelectedNote(note)} className={`w-full text-left px-5 py-4 border-b border-border/50 hover:bg-white/[0.02] transition-colors ${selectedNote?.id === note.id ? 'bg-accent/5' : ''}`}>
+              <div className="text-sm font-medium mb-1">{note.title}</div>
+              <div className="text-[11px] text-text-tertiary">{note.updated}</div>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-auto p-8">
+          {selectedNote && (
+            <div className="max-w-3xl mx-auto">
+              <input type="text" value={selectedNote.title} className="w-full bg-transparent text-xl font-semibold outline-none mb-4" readOnly />
+              <textarea
+                value={editContent}
+                onChange={e => setEditContent(e.target.value)}
+                onBlur={saveNote}
+                className="w-full h-[60vh] bg-transparent text-sm text-text-secondary leading-relaxed outline-none resize-none"
+              />
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                <span className="text-[11px] text-text-tertiary">Last edited {selectedNote.updated}</span>
+                <button onClick={saveNote} className="px-3 py-1.5 bg-accent/10 text-accent hover:bg-accent/20 rounded-lg text-xs font-medium transition-colors">Save</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Calendar ───
+const CalendarView = () => {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const hours = Array.from({ length: 12 }, (_, i) => i + 8);
+
+  return (
+    <div className="flex flex-col h-full animate-fadeIn">
+      <div className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold">Calendar</h1>
+          <div className="flex items-center gap-2">
+            <button className="p-1.5 rounded-lg hover:bg-white/5 text-text-tertiary"><I.ChevronDown /></button>
+            <span className="text-sm font-medium">July 2026</span>
+            <button className="p-1.5 rounded-lg hover:bg-white/5 text-text-tertiary rotate-180"><I.ChevronDown /></button>
+          </div>
+        </div>
+        <button className="flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-xs font-medium transition-colors">
+          <I.Plus /> New Event
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <div className="min-w-max">
+          <div className="grid grid-cols-8 border-b border-border">
+            <div className="p-3 text-xs text-text-tertiary font-medium">Time</div>
+            {days.map(day => (
+              <div key={day} className="p-3 text-xs text-text-secondary font-medium text-center">{day}</div>
+            ))}
+          </div>
+          {hours.map(hour => (
+            <div key={hour} className="grid grid-cols-8 border-b border-border/50">
+              <div className="p-3 text-[11px] text-text-tertiary">{hour}:00</div>
+              {days.map((day, dayIdx) => {
+                const event = CALENDAR_EVENTS.find(e => {
+                  const eventHour = parseInt(e.time.split(':')[0]);
+                  return e.day === dayIdx + 1 && eventHour === hour;
+                });
+                return (
+                  <div key={day} className="p-1 min-h-[60px] border-l border-border/30 relative">
+                    {event && (
+                      <div className="absolute inset-1 rounded-lg px-2 py-1 text-[11px] font-medium text-white overflow-hidden" style={{ backgroundColor: event.color + 'cc', height: `${(event.duration / 60) * 60 - 4}px` }}>
+                        {event.title}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main App ───
+const App = () => {
+  const [activeView, setActiveView] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+      if (e.key === 'Escape') {
+        setSearchOpen(false);
+        setNotificationsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'dashboard': return <DashboardView setActiveView={setActiveView} />;
+      case 'projects': return <ProjectsView />;
+      case 'tasks': return <TasksView />;
+      case 'ai': return <AIAssistantView />;
+      case 'vision': return <VisionBoardView />;
+      case 'meetings': return <MeetingsView />;
+      case 'notes': return <NotesView />;
+      case 'calendar': return <CalendarView />;
+      default: return <DashboardView setActiveView={setActiveView} />;
+    }
+  };
+
+  return (
+    <div className="flex h-screen bg-surface-base">
+      <Sidebar activeView={activeView} setActiveView={setActiveView} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0 bg-surface-panel/50 backdrop-blur-sm">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setSearchOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-surface-elevated border border-border rounded-lg text-xs text-text-tertiary hover:text-text-secondary hover:border-border-hover transition-colors">
+              <I.Search />
+              <span>Search</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] border border-white/5 ml-2">⌘K</kbd>
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setNotificationsOpen(true)} className="relative p-2 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-white/[0.03] transition-colors">
+              <I.Bell />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />
+            </button>
+            <button className="p-2 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-white/[0.03] transition-colors">
+              <I.Settings />
+            </button>
+            <div className="w-px h-6 bg-border mx-1" />
+            <Avatar user="u1" size="md" />
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto">
+          {renderView()}
+        </main>
+      </div>
+      <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      <NotificationsPanel isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
